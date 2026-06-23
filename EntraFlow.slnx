@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/EntraFlow.Cli/EntraFlow.Cli.csproj" />
+    <Project Path="src/EntraFlow.Core/EntraFlow.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/EntraFlow.Core.Tests/EntraFlow.Core.Tests.csproj" />
+  </Folder>
+</Solution>

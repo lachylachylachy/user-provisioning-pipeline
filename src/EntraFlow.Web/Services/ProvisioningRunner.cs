@@ -74,6 +74,12 @@ public sealed class ProvisioningRunner
         }
 
         var users = new CsvUserReader().Read(uploadPath);
+        if (users.Count > _storage.MaxRowsPerRun)
+        {
+            throw new InvalidOperationException(
+                $"File has {users.Count} rows, exceeding the limit of {_storage.MaxRowsPerRun}.");
+        }
+
         var results = new UserValidator(settings.Schema).Validate(users).ToList();
 
         var sink = BuildSink(settings);

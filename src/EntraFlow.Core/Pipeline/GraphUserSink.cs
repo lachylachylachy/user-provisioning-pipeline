@@ -1,5 +1,6 @@
 using EntraFlow.Core.Configuration;
 using EntraFlow.Core.Graph;
+using EntraFlow.Core.Logging;
 using EntraFlow.Core.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -69,12 +70,12 @@ public sealed class GraphUserSink : IUserSink
             {
                 var created = await client.Users.PostAsync(
                     ToGraphUser(planned, options), cancellationToken: cancellationToken);
-                _logger.LogInformation("Provisioned {Upn} (id {Id}).", planned.UserPrincipalName, created?.Id);
+                _logger.LogInformation("Provisioned {Upn} (id {Id}).", Pii.Mask(planned.UserPrincipalName), created?.Id);
                 outcomes.Add($"Created {planned.UserPrincipalName} (id {created?.Id}).");
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to provision {Upn}.", planned.UserPrincipalName);
+                _logger.LogError(ex, "Failed to provision {Upn}.", Pii.Mask(planned.UserPrincipalName));
                 outcomes.Add($"FAILED {planned.UserPrincipalName}: {ex.Message}");
             }
         }

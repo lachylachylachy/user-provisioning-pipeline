@@ -68,6 +68,11 @@ public static class AppEndpoints
                 return Results.BadRequest(new { error = "Missing 'file'." });
             }
 
+            if (!file.FileName.EndsWith(".csv", StringComparison.OrdinalIgnoreCase))
+            {
+                return Results.BadRequest(new { error = "Only .csv files are accepted." });
+            }
+
             await using var stream = file.OpenReadStream();
             var result = await runner.RunAsync(
                 file.FileName, stream, http.User.Identity?.Name ?? "api", ct);

@@ -1,4 +1,5 @@
 using EntraFlow.Core.Graph;
+using Microsoft.AspNetCore.DataProtection;
 using EntraFlow.Web.Components;
 using EntraFlow.Web.Endpoints;
 using EntraFlow.Web.Services;
@@ -14,8 +15,15 @@ builder.Services.AddRazorComponents()
 builder.Services.AddOptions<StorageOptions>().Bind(builder.Configuration.GetSection(StorageOptions.SectionName));
 builder.Services.AddOptions<AdminAuthOptions>().Bind(builder.Configuration.GetSection(AdminAuthOptions.SectionName));
 
-// Secret protection + app services.
-builder.Services.AddDataProtection();
+// Secret protection + app services. Persist Data Protection keys to the data
+// directory so the encrypted client secret survives restarts (mount this as a
+// volume in containers; swap in Azure Key Vault for multi-instance deployments).
+var storageOptions = builder.Configuration.GetSection(StorageOptions.SectionName)
+    .Get<StorageOptions>() ?? new StorageOptions();
+Directory.CreateDirectory(storageOptions.KeysFolder);
+builder.Services.AddDataProtection()
+    .PersistKeysToFileSystem(new DirectoryInfo(storageOptions.KeysFolder))
+    .SetApplicationName("EntraFlow");
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<ISecretProtector, DataProtectionSecretProtector>();
 builder.Services.AddSingleton<ISettingsStore, JsonSettingsStore>();
@@ -62,6 +70,14 @@ app.MapRazorComponents<App>()
 
 app.MapAccountEndpoints();
 app.MapEntraFlowApi();
+
+// Warn loudly if the app is exposed with the default admin password.
+var adminOptions = app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<AdminAuthOptions>>().Value;
+if (!app.Environment.IsDevelopment() && adminOptions.IsDefaultPassword)
+{
+    app.Logger.LogWarning(
+        "Admin password is unset/default. Set Admin__Password before exposing Entra-Flow.");
+}
 
 app.Run();
 

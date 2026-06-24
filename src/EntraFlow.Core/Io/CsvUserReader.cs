@@ -3,10 +3,11 @@ using EntraFlow.Core.Models;
 namespace EntraFlow.Core.Io;
 
 /// <summary>
-/// Reads user records from a CSV file with a header row of
-/// <c>Name,Email,Department,Role</c>. Supports quoted fields containing commas.
-/// Missing trailing columns are treated as empty rather than throwing, so that
-/// such rows surface as validation errors instead of crashing the run.
+/// Reads user records from a CSV file. The first non-empty line is treated as the
+/// header; every column it names becomes a field on each <see cref="UserRecord"/>,
+/// so arbitrary extra columns flow through without code changes. Supports quoted
+/// fields containing commas. Missing trailing columns are treated as empty rather
+/// than throwing, so such rows surface as validation errors instead of crashing.
 /// </summary>
 public sealed class CsvUserReader : IUserReader
 {
@@ -22,8 +23,17 @@ public sealed class CsvUserReader : IUserReader
         var lines = File.ReadAllLines(path);
         var records = new List<UserRecord>(lines.Length);
 
-        // Skip the header row; line numbers are 1-based for human-friendly reporting.
-        for (var i = 1; i < lines.Length; i++)
+        // Locate the header (first non-blank line); its position fixes the 1-based
+        // line numbers used for human-friendly error reporting.
+        var headerIndex = Array.FindIndex(lines, l => !string.IsNullOrWhiteSpace(l));
+        if (headerIndex < 0)
+        {
+            return records;
+        }
+
+        var headers = ParseLine(lines[headerIndex]).Select(h => h.Trim()).ToList();
+
+        for (var i = headerIndex + 1; i < lines.Length; i++)
         {
             var line = lines[i];
             if (string.IsNullOrWhiteSpace(line))
@@ -31,24 +41,25 @@ public sealed class CsvUserReader : IUserReader
                 continue;
             }
 
-            var fields = ParseLine(line);
+            var values = ParseLine(line);
 
-            records.Add(new UserRecord
+            var fields = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            for (var col = 0; col < headers.Count; col++)
             {
-                Name = Field(fields, 0),
-                Email = Field(fields, 1),
-                Department = Field(fields, 2),
-                Role = Field(fields, 3),
-                SourceLine = line,
-                LineNumber = i + 1,
-            });
+                var key = headers[col];
+                if (string.IsNullOrEmpty(key))
+                {
+                    continue;
+                }
+
+                fields[key] = col < values.Count ? values[col].Trim() : "";
+            }
+
+            records.Add(new UserRecord(fields, sourceLine: line, lineNumber: i + 1));
         }
 
         return records;
     }
-
-    private static string Field(IReadOnlyList<string> fields, int index) =>
-        index < fields.Count ? fields[index].Trim() : "";
 
     /// <summary>
     /// Minimal RFC 4180-style splitter: handles quoted fields and escaped quotes

@@ -20,6 +20,10 @@ public static class ServiceCollectionExtensions
             .AddOptions<EntraFlowOptions>()
             .Bind(configuration.GetSection(EntraFlowOptions.SectionName));
 
+        services
+            .AddOptions<SchemaOptions>()
+            .Bind(configuration.GetSection(SchemaOptions.SectionName));
+
         services.TryAddSingletonTimeProvider();
 
         services.AddSingleton<IUserReader, CsvUserReader>();

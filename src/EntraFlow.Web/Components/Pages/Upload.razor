@@ -1,0 +1,148 @@
+@page "/upload"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@using System.Text
+@using Microsoft.AspNetCore.Components.Forms
+@inject ProvisioningRunner Runner
+@inject ISettingsStore Settings
+@inject AuthenticationStateProvider AuthState
+
+<PageTitle>Provision · Entra-Flow</PageTitle>
+
+<h1>Provision users</h1>
+<p class="text-muted">Upload a CSV. Records are validated against your schema, then written
+    through the configured sink.</p>
+
+@{
+    var s = Settings.Current;
+    var live = s.Entra.Enabled && !s.Entra.DryRun;
+}
+<div class="alert @(live ? "alert-danger" : "alert-info") d-flex justify-content-between">
+    <span>
+        Sink: <strong>@s.Entra.Sink</strong> ·
+        @(live ? "LIVE — users will be created in Entra." : "Dry-run — no users will be created.")
+    </span>
+    <a href="settings" class="alert-link">Change in Settings</a>
+</div>
+
+<div class="mb-3">
+    <InputFile OnChange="OnFileSelected" accept=".csv" class="form-control" disabled="@_busy" />
+</div>
+
+@if (_busy)
+{
+    <div class="spinner-border text-primary" role="status"><span class="visually-hidden">Running…</span></div>
+}
+
+@if (_error is not null)
+{
+    <div class="alert alert-danger">@_error</div>
+}
+
+@if (_result is not null)
+{
+    <div class="d-flex gap-3 align-items-center my-3">
+        <span class="badge bg-success fs-6">@_result.ValidCount valid</span>
+        <span class="badge bg-danger fs-6">@_result.ErrorCount rejected</span>
+        <span class="text-muted">of @_result.TotalCount rows · run @_result.Id</span>
+        <a class="btn btn-sm btn-outline-success" download="@_result.SourceName-valid.csv"
+           href="@DataUri(_result.ValidCsv)">Download valid</a>
+        <a class="btn btn-sm btn-outline-danger" download="@_result.SourceName-errors.csv"
+           href="@DataUri(_result.ErrorCsv)">Download errors</a>
+    </div>
+
+    @if (_result.Outcomes.Count > 0)
+    {
+        <details class="mb-3">
+            <summary>Sink outcomes (@_result.Outcomes.Count)</summary>
+            <ul class="small mt-2">
+                @foreach (var o in _result.Outcomes.Take(50))
+                {
+                    <li>@o</li>
+                }
+            </ul>
+        </details>
+    }
+
+    <div class="table-responsive">
+        <table class="table table-sm table-striped align-middle">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    @foreach (var col in _result.Columns)
+                    {
+                        <th>@col</th>
+                    }
+                    <th>Result</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var r in _result.Results)
+                {
+                    <tr class="@(r.IsValid ? "" : "table-danger")">
+                        <td class="text-muted">@r.User.LineNumber</td>
+                        @foreach (var col in _result.Columns)
+                        {
+                            <td>@r.User[col]</td>
+                        }
+                        <td>
+                            @if (r.IsValid)
+                            {
+                                <span class="text-success">Valid</span>
+                            }
+                            else
+                            {
+                                <span class="text-danger">@string.Join("; ", r.Errors)</span>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private bool _busy;
+    private string? _error;
+    private RunResult? _result;
+
+    private async Task OnFileSelected(InputFileChangeEventArgs e)
+    {
+        _error = null;
+        _result = null;
+        _busy = true;
+
+        try
+        {
+            var file = e.File;
+            if (!file.Name.EndsWith(".csv", StringComparison.OrdinalIgnoreCase))
+            {
+                _error = "Please upload a .csv file.";
+                return;
+            }
+
+            var user = (await AuthState.GetAuthenticationStateAsync()).User.Identity?.Name ?? "unknown";
+
+            using var ms = new MemoryStream();
+            await using (var stream = file.OpenReadStream(maxAllowedSize: 20 * 1024 * 1024))
+            {
+                await stream.CopyToAsync(ms);
+            }
+            ms.Position = 0;
+
+            _result = await Runner.RunAsync(file.Name, ms, user);
+        }
+        catch (Exception ex)
+        {
+            _error = $"Run failed: {ex.Message}";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private static string DataUri(string csv) =>
+        "data:text/csv;base64," + Convert.ToBase64String(Encoding.UTF8.GetBytes(csv));
+}

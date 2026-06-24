@@ -1,0 +1,56 @@
+@page "/"
+@attribute [Authorize]
+@inject ISettingsStore Settings
+
+<PageTitle>Entra-Flow</PageTitle>
+
+<h1>Entra-Flow</h1>
+<p class="lead">Validate user CSVs and provision them into Microsoft Entra.</p>
+
+<div class="row g-3 mt-2">
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h2 class="h5">1 · Connect</h2>
+                <p class="text-muted">Enter your Entra app-registration details on the
+                    <a href="settings">Settings</a> page and test the connection.</p>
+                <span class="badge @(_hasCreds ? "bg-success" : "bg-secondary")">
+                    @(_hasCreds ? "Credentials saved" : "Not configured")
+                </span>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h2 class="h5">2 · Upload</h2>
+                <p class="text-muted">Drop a CSV on the <a href="upload">Provision</a> page.
+                    Records are validated against your schema.</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h2 class="h5">3 · Provision</h2>
+                <p class="text-muted">Review results, download valid/error files, and (when ready)
+                    turn off dry-run to create users in Entra.</p>
+                <span class="badge @(_live ? "bg-danger" : "bg-info")">
+                    @(_live ? "LIVE writes enabled" : "Dry-run (safe)")
+                </span>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private bool _hasCreds;
+    private bool _live;
+
+    protected override void OnInitialized()
+    {
+        var s = Settings.Current;
+        _hasCreds = s.Entra.HasCredentials;
+        _live = s.Entra.Enabled && !s.Entra.DryRun;
+    }
+}

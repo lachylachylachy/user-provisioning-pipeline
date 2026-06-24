@@ -1,0 +1,193 @@
+@page "/settings"
+@rendermode InteractiveServer
+@attribute [Authorize]
+@inject ISettingsStore Store
+@inject IEntraConnectionTester Tester
+
+<PageTitle>Settings · Entra-Flow</PageTitle>
+
+<h1>Settings</h1>
+<p class="text-muted">Connect your Microsoft Entra tenant and define the validation schema.</p>
+
+@if (_saved)
+{
+    <div class="alert alert-success py-2">Settings saved.</div>
+}
+
+<div class="card mb-4">
+    <div class="card-header">Entra connection</div>
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-4">
+                <label class="form-label">Tenant ID</label>
+                <input class="form-control" @bind="_model.Entra.TenantId" placeholder="00000000-0000-0000-0000-000000000000" />
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Client ID</label>
+                <input class="form-control" @bind="_model.Entra.ClientId" />
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Client secret</label>
+                <input class="form-control" type="password" @bind="_secretInput"
+                       placeholder="@(_hasSavedSecret ? "•••••••• (unchanged)" : "enter secret")" />
+            </div>
+        </div>
+
+        <div class="row g-3 mt-1">
+            <div class="col-md-3">
+                <label class="form-label">Sink mode</label>
+                <select class="form-select" @bind="_model.Entra.Sink">
+                    <option value="@SinkMode.Csv">CSV only</option>
+                    <option value="@SinkMode.Graph">Entra (Graph)</option>
+                    <option value="@SinkMode.Both">Both</option>
+                </select>
+            </div>
+            <div class="col-md-3 d-flex align-items-end">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="dryrun" @bind="_model.Entra.DryRun" />
+                    <label class="form-check-label" for="dryrun">Dry-run (no live writes)</label>
+                </div>
+            </div>
+            <div class="col-md-3 d-flex align-items-end">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" id="enabled" @bind="_model.Entra.Enabled" />
+                    <label class="form-check-label" for="enabled">Enable live provisioning</label>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Usage location</label>
+                <input class="form-control" @bind="_model.Entra.FieldMapping.UsageLocation" placeholder="GB" />
+            </div>
+        </div>
+
+        @if (_model.Entra.Enabled && !_model.Entra.DryRun)
+        {
+            <div class="alert alert-danger mt-3 mb-0 py-2">
+                Live provisioning is ON — valid users will be created in Entra.
+            </div>
+        }
+
+        <div class="mt-3 d-flex gap-2 align-items-center">
+            <button class="btn btn-outline-primary" @onclick="TestConnection" disabled="@_testing">
+                @(_testing ? "Testing…" : "Test connection")
+            </button>
+            @if (_testResult is not null)
+            {
+                <span class="@(_testResult.Success ? "text-success" : "text-danger")">
+                    @_testResult.Message
+                </span>
+            }
+        </div>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span>Validation schema</span>
+        <button class="btn btn-sm btn-outline-secondary" @onclick="AddField">Add field</button>
+    </div>
+    <div class="card-body">
+        <table class="table align-middle">
+            <thead>
+                <tr><th>Field name</th><th>Required</th><th>Format</th><th>Allowed values (comma-sep)</th><th></th></tr>
+            </thead>
+            <tbody>
+                @foreach (var field in _model.Schema.Fields)
+                {
+                    <tr>
+                        <td><input class="form-control form-control-sm" @bind="field.Name" /></td>
+                        <td class="text-center"><input type="checkbox" @bind="field.Required" /></td>
+                        <td>
+                            <select class="form-select form-select-sm" @bind="field.Format">
+                                <option value="@FieldFormat.None">None</option>
+                                <option value="@FieldFormat.Email">Email</option>
+                            </select>
+                        </td>
+                        <td><input class="form-control form-control-sm" value="@Join(field.AllowedValues)"
+                                   @onchange="e => SetAllowed(field, e.Value?.ToString())" /></td>
+                        <td><button class="btn btn-sm btn-outline-danger" @onclick="() => RemoveField(field)">✕</button></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+        <div class="row g-3">
+            <div class="col-md-4">
+                <label class="form-label">Unique field (duplicate check)</label>
+                <input class="form-control" @bind="_model.Schema.UniqueField" placeholder="Email" />
+            </div>
+        </div>
+    </div>
+</div>
+
+<button class="btn btn-primary" @onclick="Save">Save settings</button>
+
+@code {
+    private AppSettings _model = new();
+    private string _secretInput = "";
+    private bool _hasSavedSecret;
+    private bool _saved;
+    private bool _testing;
+    private ConnectionTestResult? _testResult;
+
+    protected override void OnInitialized()
+    {
+        _model = Store.Current;
+        _hasSavedSecret = !string.IsNullOrEmpty(_model.Entra.ClientSecret);
+        _model.Entra.ClientSecret = ""; // never bind the secret into the UI
+    }
+
+    private async Task Save()
+    {
+        if (!string.IsNullOrEmpty(_secretInput))
+        {
+            _model.Entra.ClientSecret = _secretInput;
+        }
+        else if (_hasSavedSecret)
+        {
+            _model.Entra.ClientSecret = Store.Current.Entra.ClientSecret; // keep existing
+        }
+
+        await Store.SaveAsync(_model);
+
+        _secretInput = "";
+        _hasSavedSecret = !string.IsNullOrEmpty(_model.Entra.ClientSecret);
+        _model.Entra.ClientSecret = "";
+        _saved = true;
+        _testResult = null;
+    }
+
+    private async Task TestConnection()
+    {
+        _testing = true;
+        _testResult = null;
+        try
+        {
+            var probe = _model.Clone();
+            probe.Entra.ClientSecret = string.IsNullOrEmpty(_secretInput)
+                ? Store.Current.Entra.ClientSecret
+                : _secretInput;
+            _testResult = await Tester.TestConnectionAsync(probe.Entra);
+        }
+        finally
+        {
+            _testing = false;
+        }
+    }
+
+    private void AddField() =>
+        _model.Schema.Fields.Add(new FieldRule { Name = "NewField" });
+
+    private void RemoveField(FieldRule field) =>
+        _model.Schema.Fields.Remove(field);
+
+    private static string Join(List<string>? values) =>
+        values is null ? "" : string.Join(", ", values);
+
+    private static void SetAllowed(FieldRule field, string? raw)
+    {
+        var parts = (raw ?? "")
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .ToList();
+        field.AllowedValues = parts.Count == 0 ? null : parts;
+    }
+}

@@ -1,0 +1,44 @@
+@page "/login"
+@using Microsoft.AspNetCore.Components.Web
+@attribute [AllowAnonymous]
+
+<PageTitle>Sign in · Entra-Flow</PageTitle>
+
+<div class="row justify-content-center mt-5">
+    <div class="col-md-5">
+        <div class="card shadow-sm">
+            <div class="card-body p-4">
+                <h1 class="h4 mb-3">Sign in to Entra-Flow</h1>
+
+                @if (Error is not null)
+                {
+                    <div class="alert alert-danger py-2">Invalid username or password.</div>
+                }
+
+                <form method="post" action="/account/login">
+                    <AntiforgeryToken />
+                    <input type="hidden" name="returnUrl" value="@ReturnUrl" />
+
+                    <div class="mb-3">
+                        <label class="form-label" for="username">Username</label>
+                        <input class="form-control" id="username" name="username" autocomplete="username" required />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="password">Password</label>
+                        <input class="form-control" id="password" name="password" type="password"
+                               autocomplete="current-password" required />
+                    </div>
+                    <button class="btn btn-primary w-100" type="submit">Sign in</button>
+                </form>
+            </div>
+        </div>
+        <p class="text-muted small mt-3 text-center">
+            Configure credentials via <code>Admin__Username</code> / <code>Admin__Password</code>.
+        </p>
+    </div>
+</div>
+
+@code {
+    [SupplyParameterFromQuery] private string? Error { get; set; }
+    [SupplyParameterFromQuery] private string? ReturnUrl { get; set; }
+}

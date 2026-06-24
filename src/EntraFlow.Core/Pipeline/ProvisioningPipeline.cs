@@ -33,7 +33,7 @@ public sealed class ProvisioningPipeline : IProvisioningPipeline
         _logger = logger;
     }
 
-    public IReadOnlyList<ProvisioningReport> Run()
+    public async Task<IReadOnlyList<ProvisioningReport>> RunAsync(CancellationToken cancellationToken = default)
     {
         if (!Directory.Exists(_options.InputFolder))
         {
@@ -57,13 +57,13 @@ public sealed class ProvisioningPipeline : IProvisioningPipeline
         var reports = new List<ProvisioningReport>(files.Count);
         foreach (var file in files)
         {
-            reports.Add(ProcessFile(file));
+            reports.Add(await ProcessFileAsync(file, cancellationToken));
         }
 
         return reports;
     }
 
-    public ProvisioningReport ProcessFile(string path)
+    public async Task<ProvisioningReport> ProcessFileAsync(string path, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
 
@@ -76,7 +76,7 @@ public sealed class ProvisioningPipeline : IProvisioningPipeline
         var validCount = results.Count(r => r.IsValid);
         var errorCount = results.Count - validCount;
 
-        var outputs = _sink.Write(sourceName, results);
+        var outputs = await _sink.WriteAsync(sourceName, results, cancellationToken);
 
         _logger.LogInformation(
             "{File}: {Valid} valid, {Errors} rejected ({Total} total).",

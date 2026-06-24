@@ -63,6 +63,32 @@ public class CsvUserReaderTests : IDisposable
     }
 
     [Fact]
+    public void Read_MapsArbitraryExtraColumns_FromHeader()
+    {
+        WriteCsv(
+            "Name,Email,Department,Role,EmployeeId,Location",
+            "Jane Doe,jane@company.com,IT,Admin,E-1001,London");
+
+        var user = new CsvUserReader().Read(_path).Single();
+
+        Assert.Equal("E-1001", user["EmployeeId"]);
+        Assert.Equal("London", user["Location"]);
+        Assert.Equal("Admin", user.Role);
+    }
+
+    [Fact]
+    public void Read_UnknownField_ReturnsEmptyString()
+    {
+        WriteCsv(
+            "Name,Email,Department,Role",
+            "Jane Doe,jane@company.com,IT,Admin");
+
+        var user = new CsvUserReader().Read(_path).Single();
+
+        Assert.Equal("", user["NoSuchColumn"]);
+    }
+
+    [Fact]
     public void Read_MissingFile_Throws()
     {
         Assert.Throws<FileNotFoundException>(() => new CsvUserReader().Read("does-not-exist.csv"));

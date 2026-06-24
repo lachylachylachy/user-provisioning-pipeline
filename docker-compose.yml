@@ -1,0 +1,18 @@
+services:
+  entra-flow:
+    build: .
+    image: entra-flow:latest
+    ports:
+      - "8080:8080"
+    environment:
+      # Change these before exposing the app.
+      Admin__Username: "${ENTRAFLOW_ADMIN_USER:-admin}"
+      Admin__Password: "${ENTRAFLOW_ADMIN_PASSWORD:?set ENTRAFLOW_ADMIN_PASSWORD}"
+      # Optional API key for programmatic /api access.
+      Admin__ApiKey: "${ENTRAFLOW_API_KEY:-}"
+    volumes:
+      - entraflow-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  entraflow-data:

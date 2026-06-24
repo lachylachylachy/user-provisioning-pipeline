@@ -10,10 +10,10 @@ public interface IProvisioningPipeline
     /// Processes every <c>*.csv</c> file in the configured input folder.
     /// </summary>
     /// <returns>One report per processed file.</returns>
-    IReadOnlyList<ProvisioningReport> Run();
+    Task<IReadOnlyList<ProvisioningReport>> RunAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Processes a single input file.
     /// </summary>
-    ProvisioningReport ProcessFile(string path);
+    Task<ProvisioningReport> ProcessFileAsync(string path, CancellationToken cancellationToken = default);
 }

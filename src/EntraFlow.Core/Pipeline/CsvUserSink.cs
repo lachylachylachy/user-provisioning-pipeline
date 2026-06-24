@@ -1,4 +1,5 @@
 using EntraFlow.Core.Configuration;
+using EntraFlow.Core.Io;
 using EntraFlow.Core.Models;
 using Microsoft.Extensions.Options;
 
@@ -6,60 +7,45 @@ namespace EntraFlow.Core.Pipeline;
 
 /// <summary>
 /// Writes valid and rejected records to timestamped CSV files in the configured
-/// output folder. Valid output mirrors the input columns; error output appends an
-/// <c>ErrorReasons</c> column.
+/// output folder. Columns are driven by the active <see cref="SchemaOptions"/>
+/// (plus any extra fields present on the records). Serialisation is shared with the
+/// web download path via <see cref="CsvFormatter"/>.
 /// </summary>
 public sealed class CsvUserSink : IUserSink
 {
     private readonly EntraFlowOptions _options;
+    private readonly SchemaOptions _schema;
     private readonly TimeProvider _timeProvider;
 
-    public CsvUserSink(IOptions<EntraFlowOptions> options, TimeProvider timeProvider)
+    public CsvUserSink(
+        IOptions<EntraFlowOptions> options,
+        IOptions<SchemaOptions> schema,
+        TimeProvider timeProvider)
     {
         _options = options.Value;
+        _schema = schema.Value;
         _timeProvider = timeProvider;
     }
 
-    public IReadOnlyList<string> Write(string sourceName, IReadOnlyList<ValidationResult> results)
+    public async Task<IReadOnlyList<string>> WriteAsync(
+        string sourceName,
+        IReadOnlyList<ValidationResult> results,
+        CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sourceName);
         ArgumentNullException.ThrowIfNull(results);
 
         Directory.CreateDirectory(_options.OutputFolder);
 
+        var columns = CsvFormatter.ResolveColumns(_schema, results);
+
         var stamp = _timeProvider.GetLocalNow().ToString("yyyyMMdd-HHmmss");
         var validPath = Path.Combine(_options.OutputFolder, $"{sourceName}-valid-{stamp}.csv");
         var errorPath = Path.Combine(_options.OutputFolder, $"{sourceName}-errors-{stamp}.csv");
 
-        var valid = results.Where(r => r.IsValid).Select(r => r.User).ToList();
-        var errors = results.Where(r => !r.IsValid).ToList();
+        await File.WriteAllLinesAsync(validPath, CsvFormatter.ValidLines(columns, results), cancellationToken);
+        await File.WriteAllLinesAsync(errorPath, CsvFormatter.ErrorLines(columns, results), cancellationToken);
 
-        var written = new List<string>();
-
-        var validLines = new List<string> { "Name,Email,Department,Role" };
-        validLines.AddRange(valid.Select(u => string.Join(',',
-            Csv(u.Name), Csv(u.Email), Csv(u.Department), Csv(u.Role))));
-        File.WriteAllLines(validPath, validLines);
-        written.Add(validPath);
-
-        var errorLines = new List<string> { "Name,Email,Department,Role,ErrorReasons" };
-        errorLines.AddRange(errors.Select(r => string.Join(',',
-            Csv(r.User.Name), Csv(r.User.Email), Csv(r.User.Department), Csv(r.User.Role),
-            Csv(string.Join("; ", r.Errors)))));
-        File.WriteAllLines(errorPath, errorLines);
-        written.Add(errorPath);
-
-        return written;
-    }
-
-    /// <summary>Quotes a field when it contains a comma, quote, or newline.</summary>
-    private static string Csv(string value)
-    {
-        if (value.Contains(',') || value.Contains('"') || value.Contains('\n') || value.Contains('\r'))
-        {
-            return $"\"{value.Replace("\"", "\"\"")}\"";
-        }
-
-        return value;
+        return [validPath, errorPath];
     }
 }

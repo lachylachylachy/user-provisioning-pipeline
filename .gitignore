@@ -37,3 +37,6 @@ data/output/*
 data/input/archive/
 logs/*
 !logs/.gitkeep
+
+# Web app runtime data (settings, audit, uploads, outputs)
+src/EntraFlow.Web/data/

@@ -2,8 +2,10 @@
   <Folder Name="/src/">
     <Project Path="src/EntraFlow.Cli/EntraFlow.Cli.csproj" />
     <Project Path="src/EntraFlow.Core/EntraFlow.Core.csproj" />
+    <Project Path="src/EntraFlow.Web/EntraFlow.Web.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/EntraFlow.Core.Tests/EntraFlow.Core.Tests.csproj" />
+    <Project Path="tests/EntraFlow.Web.Tests/EntraFlow.Web.Tests.csproj" />
   </Folder>
 </Solution>

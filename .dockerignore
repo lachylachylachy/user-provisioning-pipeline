@@ -1,0 +1,12 @@
+**/bin/
+**/obj/
+**/.vs/
+**/.vscode/
+**/.idea/
+.git/
+.github/
+data/
+logs/
+src/EntraFlow.Web/data/
+*.user
+.DS_Store

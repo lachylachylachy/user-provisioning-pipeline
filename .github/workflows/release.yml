@@ -1,0 +1,53 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rid: [linux-x64, win-x64, osx-arm64]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Test
+        run: dotnet test --configuration Release
+
+      - name: Publish web (${{ matrix.rid }})
+        run: >
+          dotnet publish src/EntraFlow.Web/EntraFlow.Web.csproj
+          -c Release -r ${{ matrix.rid }} --self-contained true
+          -p:PublishSingleFile=true
+          -o publish/web-${{ matrix.rid }}
+
+      - name: Publish CLI (${{ matrix.rid }})
+        run: >
+          dotnet publish src/EntraFlow.Cli/EntraFlow.Cli.csproj
+          -c Release -r ${{ matrix.rid }} --self-contained true
+          -p:PublishSingleFile=true
+          -o publish/cli-${{ matrix.rid }}
+
+      - name: Package
+        run: |
+          cd publish
+          zip -r ../entra-flow-web-${{ matrix.rid }}.zip web-${{ matrix.rid }}
+          zip -r ../entra-flow-cli-${{ matrix.rid }}.zip cli-${{ matrix.rid }}
+
+      - name: Upload to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            entra-flow-web-${{ matrix.rid }}.zip
+            entra-flow-cli-${{ matrix.rid }}.zip

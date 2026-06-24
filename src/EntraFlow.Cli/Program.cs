@@ -20,6 +20,11 @@ builder.Configuration.AddJsonFile(
     optional: true,
     reloadOnChange: false);
 
+// Re-assert environment variables and command line as the highest-precedence
+// sources, so they still override the JSON file added above.
+builder.Configuration.AddEnvironmentVariables();
+builder.Configuration.AddCommandLine(args);
+
 builder.Services.AddEntraFlowCore(builder.Configuration);
 
 using var host = builder.Build();
@@ -29,7 +34,7 @@ var pipeline = host.Services.GetRequiredService<IProvisioningPipeline>();
 
 try
 {
-    var reports = pipeline.Run();
+    var reports = await pipeline.RunAsync();
 
     if (reports.Count == 0)
     {

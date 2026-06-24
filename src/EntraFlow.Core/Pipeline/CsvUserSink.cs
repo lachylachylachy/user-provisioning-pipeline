@@ -26,7 +26,10 @@ public sealed class CsvUserSink : IUserSink
         _timeProvider = timeProvider;
     }
 
-    public IReadOnlyList<string> Write(string sourceName, IReadOnlyList<ValidationResult> results)
+    public async Task<IReadOnlyList<string>> WriteAsync(
+        string sourceName,
+        IReadOnlyList<ValidationResult> results,
+        CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sourceName);
         ArgumentNullException.ThrowIfNull(results);
@@ -45,7 +48,7 @@ public sealed class CsvUserSink : IUserSink
         validLines.AddRange(results
             .Where(r => r.IsValid)
             .Select(r => string.Join(',', columns.Select(c => Csv(r.User[c])))));
-        File.WriteAllLines(validPath, validLines);
+        await File.WriteAllLinesAsync(validPath, validLines, cancellationToken);
         written.Add(validPath);
 
         var errorHeader = columns.Append("ErrorReasons");
@@ -54,7 +57,7 @@ public sealed class CsvUserSink : IUserSink
             .Where(r => !r.IsValid)
             .Select(r => string.Join(',',
                 columns.Select(c => Csv(r.User[c])).Append(Csv(string.Join("; ", r.Errors))))));
-        File.WriteAllLines(errorPath, errorLines);
+        await File.WriteAllLinesAsync(errorPath, errorLines, cancellationToken);
         written.Add(errorPath);
 
         return written;
